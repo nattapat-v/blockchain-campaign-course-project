@@ -1,0 +1,411 @@
+<html>
+  <head>
+    <!-- Bootstrap CDN -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    
+    <!-- Font -->
+    <link href='https://fonts.googleapis.com/css?family=Open Sans' rel='stylesheet'>
+
+    <!-- Web3 -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+
+    <!-- Ethereum Setup -->
+    <script>
+      const web3 = new Web3();
+      web3.setProvider(
+        new web3.providers.HttpProvider("http://localhost:8545")
+      );
+      const factoryAddress = "0xa1523f4093a2771d952b2d5e72726021ED33A0af";
+      const campaignAddress = "0xDD5776398Cc6340AFD51c75270c63A0cB4EC65C2";
+
+      const factoryAbi = [{"inputs":[{"internalType":"uint256","name":"minimum","type":"uint256"}],"name":"createCampaign","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"deployedCampaigns","outputs":[{"internalType":"contract Campaign","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getDeployedCampaigns","outputs":[{"internalType":"contract Campaign[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"}];
+      const campaignAbi = [{"inputs":[{"internalType":"uint256","name":"minimum","type":"uint256"},{"internalType":"address","name":"creator","type":"address"}],"stateMutability":"payable","type":"constructor"},{"inputs":[{"internalType":"uint256","name":"index","type":"uint256"}],"name":"approveRequest","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"approvers","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"contribute","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"string","name":"_description","type":"string"},{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"address","name":"_recipient","type":"address"}],"name":"createRequest","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"index","type":"uint256"}],"name":"finalizeRequest","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"getRequests","outputs":[{"components":[{"internalType":"string","name":"description","type":"string"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"address","name":"recipient","type":"address"},{"internalType":"bool","name":"complete","type":"bool"},{"internalType":"uint256","name":"approval_count","type":"uint256"}],"internalType":"struct Campaign.Request[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"manager","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"minimumContribution","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"requests","outputs":[{"internalType":"string","name":"description","type":"string"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"address","name":"recipient","type":"address"},{"internalType":"bool","name":"complete","type":"bool"},{"internalType":"uint256","name":"approval_count","type":"uint256"}],"stateMutability":"view","type":"function"}];
+
+      var factory = new web3.eth.Contract(factoryAbi, factoryAddress);
+      var campaign = new web3.eth.Contract(campaignAbi, campaignAddress);
+
+      var accounts;
+
+      getAccounts = async () => {
+        accounts = await web3.eth.getAccounts();
+        await web3.eth.personal.unlockAccount(accounts[0], "password1", 0);
+        await web3.eth.personal.unlockAccount(accounts[1], "password2", 0);
+        await web3.eth.personal.unlockAccount(accounts[2], "password3", 0);
+
+        let display = "<option value='null'>Please select the account</option>"
+        for(i = 0; i < accounts.length; i++) {
+          display += "<option>" + accounts[i] + "</option>"
+        }
+
+        document.getElementById('accounts').innerHTML = display;
+        document.getElementById('contributorAccounts').innerHTML = display;
+      }
+
+      createCampaign = async () => {
+        let minimum = document.getElementById("minimum").value;
+
+        document.getElementById('result').innerHTML = 'Processing.';
+
+        try {
+          await factory.methods
+                        .createCampaign(minimum)
+                        .send({from: accounts[0], gas: '3000000'});
+          document.getElementById('result').innerHTML = 'New campaign has been added.';
+        } catch (error) {
+          document.getElementById('result').innerHTML = error;
+        }
+        
+        getCampaignList();
+      }
+
+      getCampaignList = async () => {
+        let campaignList =  await factory.methods
+                                          .getDeployedCampaigns()
+                                          .call();
+        
+        let display = "<table class='table table-bordered table-sm'><thead><tr><th scope='col'>#</th><th scope='col'>Campaign Address</th><th scope='col'>Minimum Contribution</th></tr></thead>";
+        let index = 1;
+        for(let campaignAddress of campaignList) {
+          let campaign = new web3.eth.Contract(campaignAbi, campaignAddress);
+
+          let minimumContribution = await campaign.methods
+                                                    .minimumContribution()
+                                                    .call();
+
+          display += "<tr><td>" + index + "</td><td class='copy-address' onclick='copy(this)'>" + campaignAddress + "</td><td>" + minimumContribution + "</td></tr>";
+          index += 1;
+        }   
+
+        display += "</table>";
+        document.getElementById('campaignList').innerHTML = '<table>' + display + '</table>';
+      }
+
+      getRequestList = async () => {
+        let campaignList = await factory.methods
+                                        .getDeployedCampaigns()
+                                        .call();
+        
+        let display = "<table class='table table-bordered table-sm'><thead><tr><th scope='col'>#Campaign</th><th scope='col'>#Request</th><th scope='col'>Description</th><th scope='col'>Amount</th><th scope='col'>Recipient</th><th scope='col'>Complete</th><th scope='col'>No. of Approvals</th></tr></thead>";
+        let campaignIndex = 1;
+        for(let campaignAddress of campaignList) {
+          let requestIndex = 1;
+
+          let campaign = new web3.eth.Contract(campaignAbi, campaignAddress);
+
+          let requestList = await campaign.methods
+                                          .getRequests()
+                                          .call();
+          for(let request of requestList) {
+            display += "<tr><td>" + campaignIndex +
+                       "</td><td>" + requestIndex + 
+                       "</td><td>" + request.description +
+                       "</td><td>" + request.amount +
+                       "</td><td>" + request.recipient +
+                       "</td><td>" + request.complete +
+                       "</td><td>" + request.approval_count +
+                       "</td></tr>"
+            requestIndex += 1;
+          }
+
+          campaignIndex += 1;
+        }
+
+        display += "</table>"
+        document.getElementById('requestList').innerHTML = '<table>' + display + '</table>';
+      }
+
+      contribute = async () => {
+        let accountTmpAddress = document.getElementById('accounts');
+        let accountAddress = accountTmpAddress.options[accountTmpAddress.selectedIndex].text;
+        let campaignAddress = document.getElementById('campaignAddress').value;
+        let contributeValue = document.getElementById('contributeValue').value;
+        
+        let campaign = new web3.eth.Contract(campaignAbi, campaignAddress)
+
+        document.getElementById('contributeResult').innerHTML = 'Processing.';
+
+        try {
+          await campaign.methods
+                              .contribute()
+                              .send({from: accountAddress, gas: '3000000', value: contributeValue});
+          document.getElementById('contributeResult').innerHTML = 'Successfully contributed the campaign.';
+        } catch (error) {
+          document.getElementById('contributeResult').innerHTML = 'Something went wrong';
+        }
+
+        getRequestList();
+      }
+      
+      approveRequest = async () => {
+        let contributorTmpAddress = document.getElementById('contributorAccounts');
+        let contributorAddress = contributorTmpAddress.options[contributorTmpAddress.selectedIndex].text;
+        let campaignIndex = document.getElementById('campaignIndex').value - 1;
+        let campaignList =  await factory.methods
+                                          .getDeployedCampaigns()
+                                          .call();
+        let campaignAddress = campaignList[campaignIndex]
+        let campaign = new web3.eth.Contract(campaignAbi, campaignAddress)
+        let requestIndex = document.getElementById('requestIndex').value - 1;
+
+        document.getElementById('approveResult').innerHTML = 'Processing.';
+
+        try {
+          await campaign.methods
+                              .approveRequest(requestIndex)
+                              .send({from: contributorAddress, gas: '3000000'});
+          document.getElementById('approveResult').innerHTML = 'Successfully approved the request';
+        } catch (error) {
+          document.getElementById('approveResult').innerHTML = 'Something went wrong.';
+        }
+
+        getRequestList();
+      }
+
+      createRequest = async () => {
+        let campaignIndex = document.getElementById('campaignRequestIndex').value - 1;
+        let description = document.getElementById('campaignRequestDescription').value;
+        let amount = document.getElementById('campaignRequestAmount').value;
+        let recipient = document.getElementById('campaignRequestRecipient').value;
+
+        let campaignList = await factory.methods
+                                          .getDeployedCampaigns()
+                                          .call();
+        let campaignAddress = campaignList[campaignIndex]
+        let campaign = new web3.eth.Contract(campaignAbi, campaignAddress)
+        document.getElementById('requestResult').innerHTML = 'Processing.';
+
+        try {
+          await campaign.methods
+                          .createRequest(description, amount, recipient)
+                          .send({from: accounts[0], gas: '3000000'});
+          document.getElementById('requestResult').innerHTML = 'Successfully created the request.';
+        } catch (error) {
+          document.getElementById('requestResult').innerHTML = 'Something went wrong.';
+        }
+
+        getRequestList();
+      }
+
+      finalizeRequest = async () => {
+        let finalizeRequestCampaignIndex = document.getElementById('finalizeRequestCampaignIndex').value - 1;
+        let finalizeRequestIndex = document.getElementById('finalizeRequestIndex').value - 1;
+
+        let campaignList = await factory.methods
+                                        .getDeployedCampaigns()
+                                        .call();
+        let campaignAddress = campaignList[finalizeRequestCampaignIndex]
+        let campaign = new web3.eth.Contract(campaignAbi, campaignAddress)
+        document.getElementById('finalizeRequestResult').innerHTML = 'Processing.';
+        
+        try {
+          await campaign.methods
+                            .finalizeRequest(finalizeRequestIndex)
+                            .send({from: accounts[0], gas: '3000000'});
+          document.getElementById('finalizeRequestResult').innerHTML = 'Successfully finalized the request';
+        } catch (error) {
+          document.getElementById('finalizeRequestResult').innerHTML = 'Something went wrong.'
+        }
+
+        getRequestList();
+      }
+
+      copy = async (that) => {
+        var inp = document.createElement('input');
+        document.body.appendChild(inp)
+        inp.value =that.textContent
+        inp.select();
+        document.execCommand('copy',false);
+        inp.remove();
+      }
+    </script>
+  </head>
+
+  <body onload ="getAccounts(); getCampaignList(); getRequestList();">
+    <nav class="navbar navbar-dark bg-primary">
+      <span class="navbar-brand mb-0 h6">
+        Campaign Project: 60050167
+      </span>
+    </nav>
+
+    <div class="row">
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            Campaign List
+          </div>
+          <div class="card-body">
+            <p class="card-text" id="campaignList">
+              ...
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            New Campaign Details
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              <label>Minimum Contribution</label>
+              <input type="text" id="minimum"/>
+              <div id="result"></div>
+              <button type="button" class="btn btn-primary btn-sm btn-position" onclick="createCampaign()">Create</button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            Contribute
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              <label>Account:&emsp;&emsp;&emsp;&emsp;&emsp;</label>
+              <select id="accounts" class="text-box-size">
+                <option value="null">Please select the account</option>
+                <option value="null">0x0000000000000000000000000000000000000000</option>
+              </select>
+              <br>
+              <label>Campaign Address: </label>
+              <input type="text" id="campaignAddress" class="text-box-size"/>
+              <br>
+              <label>Contribute: &ensp;&emsp;&emsp;&emsp;</label>
+              <input type="text" id="contributeValue" class="text-box-size"/>
+              <div id="contributeResult"></div>
+              <button type="button" class="btn btn-primary btn-sm btn-contribute-position" onclick="contribute()">Contribute</button>
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            Contributor Approvement Details
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              <label>Account: </label>
+              <br>
+              <select id="contributorAccounts" class="text-box-size">
+                <option value="null">Please select the account</option>
+                <option value="null">0x0000000000000000000000000000000000000000</option>
+              </select>
+              <label>Index of the Campaign: </label>
+              <br>
+              <input type="text" id="campaignIndex" class="text-box-size"/>
+              <br>
+              <label>Index of the Campaign Request: </label>
+              <br>
+              <input type="text" id="requestIndex" class="text-box-size"/>
+              <div id="approveResult"></div>
+              <button type="button" class="btn btn-primary btn-sm btn-contribute-position" onclick="approveRequest()">Approve</button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            Requests of Each Campaigns
+          </div>
+          <div class="card-body">
+            <p class="card-text" id="requestList">
+              ...
+            </p>
+          </div>
+        </div>  
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            New Request Details
+          </div>
+          <div class="card-body">
+            <p class="card-text" id="requestList">
+              <label>Index of the Campaign: </label>
+              <br>
+              <input type="text" id="campaignRequestIndex" class="text-box-size"/>
+              <br>
+              <label>Request Description: </label>
+              <br>
+              <input type="text" id="campaignRequestDescription" class="text-box-size"/>
+              <br>
+              <label>Amount: </label>
+              <br>
+              <input type="text" id="campaignRequestAmount" class="text-box-size"/>
+              <br>
+              <label>Recipient: </label>
+              <br>
+              <input type="text" id="campaignRequestRecipient" class="text-box-size"/>
+              <br>
+              <div id="requestResult"></div>
+              <button type="button" class="btn btn-primary btn-sm btn-contribute-position" onclick="createRequest()">Create</button>
+            </p>
+          </div>
+        </div>  
+      </div>
+      <div class="col px-md-5 mt-3">
+        <div class="card bg-light">
+          <div class="card-header">
+            Finalize the Request
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              <label>Campaign Index: </label>
+              <br>
+              <input type="text" id="finalizeRequestCampaignIndex" class="text-box-size"/>
+              <br>
+              <label>Request Index: </label>
+              <br>
+              <input type="text" id="finalizeRequestIndex" class="text-box-size"/>
+              <div id="finalizeRequestResult"></div>
+              <button type="button" class="btn btn-primary btn-sm btn-contribute-position" onclick="finalizeRequest()">Finalize</button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+
+  <style>
+    body {
+      font-family: 'Open Sans'; 
+      font-size: 20px;
+      overflow-x:hidden;
+    }
+    .btn-position {
+      position: relative;
+      right: -88%;
+    }
+    .table-sm {
+      font-size: 18px;
+    }
+    .copy-address:hover {
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .text-box-size {
+      width: 525px;
+      height: 35px;
+    }
+    .btn-contribute-position {
+      position: relative;
+      left: 555px;
+    }
+  </style>
+</html>
+
